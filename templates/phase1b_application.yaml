@@ -1,0 +1,66 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Application infrastructure - EC2, Auto Scaling Group, RDS etc.
+
+Parameters:
+  NetworkStackName:
+    Type: String
+    Description: "Name the network stack"
+
+  ApplicationStackName:
+    Type: String
+    Description: "Name the application stack"
+
+  AmazonLinuxAMIID:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Description: "Image ARN for the snapshot created after S3 intergration"
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2 # Temp for testing
+
+  ServerInstanceProfile:
+    Type: String
+    Default: myS3Role
+
+Resources:
+
+##
+## 7 Define a scaling policy for your auto-scaling group
+##
+
+  AutoScaleWordpressServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow traffic from LB
+      VpcId:
+        Fn::ImportValue: !Sub "${NetworkStackName}-VPCID"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId:
+            Fn::ImportValue: !Sub "${ApplicationStackName}-ALBSecurityGroup"
+
+  WordpressLaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !Ref AmazonLinuxAMIID
+      InstanceType: t2.micro
+      KeyName: 
+        Fn::ImportValue: !Sub "${ApplicationStackName}-WordpressServerKeyPair"
+      SecurityGroups:
+        - !Ref AutoScaleWordpressServerSecurityGroup
+      IamInstanceProfile: !Ref ServerInstanceProfile
+
+  WordpressScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchConfigurationName: !Ref WordpressLaunchConfiguration
+      MinSize: 1
+      MaxSize: 3
+      DesiredCapacity: 1
+      VPCZoneIdentifier:
+        - Fn::ImportValue: !Sub "${NetworkStackName}-PrivateSubnet1ExportId"
+        - Fn::ImportValue: !Sub "${NetworkStackName}-PrivateSubnet2ExportId"
+      Tags:
+        - Key: Name
+          Value: WordpressAutoscaleServer
+          PropagateAtLaunch: true
+

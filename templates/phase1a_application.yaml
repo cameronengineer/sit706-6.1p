@@ -1,0 +1,189 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Application infrastructure - EC2, Auto Scaling Group, RDS etc.
+
+Parameters:
+  NetworkStackName:
+    Type: String
+    Description: "Name the network stack"
+
+  AmazonLinuxAMIID:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+
+  ServerInstanceProfile:
+    Type: String
+    Default: myS3Role
+
+##
+## 2.1 Create a MySQL RDS
+##
+
+Resources:
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: "Subnet group for the WordPress database"
+      SubnetIds:
+        - Fn::ImportValue: !Sub "${NetworkStackName}-PrivateSubnet1ExportId"
+        - Fn::ImportValue: !Sub "${NetworkStackName}-PrivateSubnet2ExportId"
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Security group for WordPress database"
+      VpcId: 
+        Fn::ImportValue: !Sub "${NetworkStackName}-VPCID"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId:
+            Fn::GetAtt:
+              - WordpressServerSecurityGroup
+              - GroupId
+
+  DatabaseInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      DBInstanceClass: "db.t3.micro"
+      DBName: "Wordpress"
+      MasterUsername: "master"
+      MasterUserPassword: "heynaman" 
+      AllocatedStorage: "20"
+      MultiAZ: true
+      Engine: "mysql"
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      EngineVersion: "8.0.35"
+      PubliclyAccessible: false
+
+##
+## 2.2 Create an Application Load Balancer and place it in both public subnet 1 and public subnet 2
+##
+
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Scheme: internet-facing
+      Subnets:
+        - Fn::ImportValue: !Sub "${NetworkStackName}-PublicSubnet1ExportId"
+        - Fn::ImportValue: !Sub "${NetworkStackName}-PublicSubnet2ExportId"
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Type: application
+      IpAddressType: ipv4
+
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Security group for the ALB in-front of Wordpress"
+      VpcId:
+        Fn::ImportValue: !Sub "${NetworkStackName}-VPCID"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
+      LoadBalancerArn: !Ref ALB
+      Port: 80
+      Protocol: HTTP
+
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckEnabled: true
+      Name: Wordpress
+      Port: 80
+      Protocol: HTTP
+      VpcId:
+        Fn::ImportValue: !Sub "${NetworkStackName}-VPCID"
+
+
+##
+## 4 Create an S3 bucket with public access disabled
+##
+
+  MediaOffloadBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: mediaoffloadbucket-sit706-61p
+
+      # TODO: Add any additional perams to lock down bucket.
+
+##
+## 5 Launch the AMI server 
+##
+
+  WordpressServerKeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: WordpressServerKeyPair
+
+  WordpressServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow traffic from Internet
+      VpcId:
+        Fn::ImportValue: !Sub "${NetworkStackName}-VPCID"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        # - IpProtocol: tcp
+        #   FromPort: 22
+        #   ToPort: 22
+        #   CidrIp: 0.0.0.0/0
+
+  WordpressServer:
+    Type: AWS::EC2::Instance
+    DependsOn: ["DatabaseInstance"]
+    Properties:
+      InstanceType: t2.micro
+      ImageId: !Ref AmazonLinuxAMIID
+      Tags:
+        - Key: Name
+          Value: WordpressServer
+      KeyName: !Ref WordpressServerKeyPair
+      SecurityGroupIds:
+        - !Ref WordpressServerSecurityGroup
+      IamInstanceProfile: !Ref ServerInstanceProfile
+      SubnetId:
+        Fn::ImportValue: !Sub "${NetworkStackName}-PublicSubnet2ExportId"
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          yum -y update
+          yum -y install httpd mysql
+          amazon-linux-extras install php7.4 -y
+          wget http://wordpress.org/latest.tar.gz -P /tmp/
+          tar zxvf /tmp/latest.tar.gz -C /tmp
+          cp -r /tmp/wordpress/* /var/www/html/
+          chown apache:apache -R /var/www/html
+          yum install -y php php-xml # Added to fix issue with WP Offload App
+          yum install -y php-gd # Added to fix issue with WP Offload App
+          systemctl enable httpd.service
+          systemctl start httpd.service
+
+Outputs:
+
+##
+## Export the values so they can be accessed by the application autoscaling cloud formation.
+##
+  ALBSecurityGroupExportId:
+    Value: !Ref ALBSecurityGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-ALBSecurityGroup"
+
+  WordpressServerKeyPairExportId:
+    Value: !Ref WordpressServerKeyPair
+    Export:
+      Name: !Sub "${AWS::StackName}-WordpressServerKeyPair"
