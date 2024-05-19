@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: Application infrastructure - EC2, Auto Scaling Group, RDS etc.
+Description: Autoscaling Wordpress Infra
 
 Parameters:
   NetworkStackName:
@@ -11,9 +11,9 @@ Parameters:
     Description: "Name the application stack"
 
   AmazonLinuxAMIID:
-    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Type: String
     Description: "Image ARN for the snapshot created after S3 intergration"
-    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2 # Temp for testing
+    # Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2 # Temp for testing
 
   ServerInstanceProfile:
     Type: String
@@ -63,4 +63,56 @@ Resources:
         - Key: Name
           Value: WordpressAutoscaleServer
           PropagateAtLaunch: true
+      TargetGroupARNs:
+        - Fn::ImportValue: !Sub "${ApplicationStackName}-ALBTargetGroup"
+
+  WordpressScalingPolicyUp:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref WordpressScalingGroup
+      ScalingAdjustment: '1'
+
+  WordpressScalingPolicyDown:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName: !Ref WordpressScalingGroup
+      ScalingAdjustment: '-1'
+
+  CPUUtilizationAlarmHigh:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      EvaluationPeriods: 1
+      Statistic: Average
+      Threshold: 70
+      AlarmDescription: "Scale with high CPU"
+      Period: 180
+      AlarmActions:
+        - !Ref WordpressScalingPolicyUp
+      Namespace: AWS/EC2
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref WordpressScalingGroup
+      ComparisonOperator: GreaterThanThreshold
+      MetricName: CPUUtilization
+
+  CPUUtilizationAlarmLow:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      EvaluationPeriods: 1
+      Statistic: Average
+      Threshold: 25
+      AlarmDescription: "Scale when low CPU"
+      Period: 180
+      AlarmActions:
+        - !Ref WordpressScalingPolicyDown
+      Namespace: AWS/EC2
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref WordpressScalingGroup
+      ComparisonOperator: LessThanThreshold      
+      MetricName: CPUUtilization
+
+
 

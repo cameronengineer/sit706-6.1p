@@ -99,7 +99,6 @@ Resources:
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      HealthCheckEnabled: true
       Name: Wordpress
       Port: 80
       Protocol: HTTP
@@ -116,7 +115,6 @@ Resources:
     Properties:
       BucketName: mediaoffloadbucket-sit706-61p
 
-      # TODO: Add any additional perams to lock down bucket.
 
 ##
 ## 5 Launch the AMI server 
@@ -187,3 +185,8 @@ Outputs:
     Value: !Ref WordpressServerKeyPair
     Export:
       Name: !Sub "${AWS::StackName}-WordpressServerKeyPair"
+
+  ALBTargetGroupExportId:
+    Value: !Ref ALBTargetGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-ALBTargetGroup"
