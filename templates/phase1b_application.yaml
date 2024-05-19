@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: 2010-09-09
-Description: Autoscaling Wordpress Infra
+Description: Autoscaling Wordpress
 
 Parameters:
   NetworkStackName:
