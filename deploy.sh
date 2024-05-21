@@ -42,7 +42,7 @@ aws cloudformation create-stack \
   --template-body file://templates/phase1b_application.yaml \
   --parameters ParameterKey=NetworkStackName,ParameterValue=network \
                ParameterKey=ApplicationStackName,ParameterValue=application \
-               ParameterKey=AmazonLinuxAMIID,ParameterValue=ami-0f9aa134051df6443 \
+               ParameterKey=WordPressAMIID,ParameterValue=ami-0f9aa134051df6443 \
   --capabilities CAPABILITY_IAM
 
 aws cloudformation update-stack \
@@ -50,5 +50,5 @@ aws cloudformation update-stack \
   --template-body file://templates/phase1b_application.yaml \
   --parameters ParameterKey=NetworkStackName,ParameterValue=network \
                ParameterKey=ApplicationStackName,ParameterValue=application \
-               ParameterKey=AmazonLinuxAMIID,ParameterValue=ami-0f9aa134051df6443 \
+               ParameterKey=WordPressAMIID,ParameterValue=ami-0f9aa134051df6443 \
   --capabilities CAPABILITY_IAM

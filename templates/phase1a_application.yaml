@@ -58,6 +58,19 @@ Resources:
       EngineVersion: "8.0.35"
       PubliclyAccessible: false
 
+  ReadReplicaDatabaseInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      SourceDBInstanceIdentifier: !Ref DatabaseInstance
+      DBInstanceClass: "db.t3.micro"
+      Engine: "mysql"
+      MultiAZ: false
+      PubliclyAccessible: false
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      EngineVersion: "8.0.35"
+
+
 ##
 ## 2.2 Create an Application Load Balancer and place it in both public subnet 1 and public subnet 2
 ##

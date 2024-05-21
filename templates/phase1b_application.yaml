@@ -10,7 +10,7 @@ Parameters:
     Type: String
     Description: "Name the application stack"
 
-  AmazonLinuxAMIID:
+  WordPressAMIID:
     Type: String
     Description: "Image ARN for the snapshot created after S3 intergration"
     # Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2 # Temp for testing
@@ -41,7 +41,7 @@ Resources:
   WordpressLaunchConfiguration:
     Type: AWS::AutoScaling::LaunchConfiguration
     Properties:
-      ImageId: !Ref AmazonLinuxAMIID
+      ImageId: !Ref WordPressAMIID
       InstanceType: t2.micro
       KeyName: 
         Fn::ImportValue: !Sub "${ApplicationStackName}-WordpressServerKeyPair"
