@@ -41,6 +41,13 @@ Resources:
             Fn::GetAtt:
               - WordpressServerSecurityGroup
               - GroupId
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          SourceSecurityGroupId:
+            Fn::GetAtt:
+              - AutoScaleWordpressServerSecurityGroup
+              - GroupId
 
   DatabaseInstance:
     Type: AWS::RDS::DBInstance
@@ -150,10 +157,10 @@ Resources:
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 0.0.0.0/0
+        # - IpProtocol: tcp
+        #   FromPort: 22
+        #   ToPort: 22
+        #   CidrIp: 0.0.0.0/0
 
   WordpressServer:
     Type: AWS::EC2::Instance
@@ -185,6 +192,23 @@ Resources:
           systemctl enable httpd.service
           systemctl start httpd.service
 
+##
+## For the Auto-scaling Wordpress server to access RDS 
+##
+
+  AutoScaleWordpressServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow traffic from LB
+      VpcId:
+        Fn::ImportValue: !Sub "${NetworkStackName}-VPCID"
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+
+
 Outputs:
 
 ##
@@ -204,3 +228,8 @@ Outputs:
     Value: !Ref ALBTargetGroup
     Export:
       Name: !Sub "${AWS::StackName}-ALBTargetGroup"
+
+  AutoScaleWordpressServerSecurityGroupExportId:
+    Value: !Ref AutoScaleWordpressServerSecurityGroup
+    Export:
+      Name: !Sub "${AWS::StackName}-AutoScaleWordpressServerSecurityGroup"
